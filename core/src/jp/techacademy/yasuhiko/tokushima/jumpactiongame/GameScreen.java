@@ -3,6 +3,7 @@ package jp.techacademy.yasuhiko.tokushima.jumpactiongame;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.ScreenAdapter;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
@@ -34,7 +35,7 @@ public class GameScreen extends ScreenAdapter {
     static final int GAME_STATE_GAMEOVER = 2;
 
     // 重力
-    static final float GRAVITY = -12;
+    static final float GRAVITY = -9;
 
     private JumpActionGame mGame;
 
@@ -50,6 +51,7 @@ public class GameScreen extends ScreenAdapter {
     List<Star> mStars;
     Ufo mUfo;
     Player mPlayer;
+    List<Enemy> mEnemys;
 
     float mHeightSoFar;     // プレイヤーが地面からどれだけ離れたかを保持
     int mGameState;
@@ -63,6 +65,13 @@ public class GameScreen extends ScreenAdapter {
     int mHighScore;
     // ハイスコア永続化
     Preferences mPrefs;
+
+    // Sound関係
+    Sound mJumpSound;
+    Sound mEnemySound;
+    Sound mStarSound;
+    Sound mGoalSound;
+    Sound mFallSound;
 
     public GameScreen(JumpActionGame game) {
         mGame = game;
@@ -89,6 +98,8 @@ public class GameScreen extends ScreenAdapter {
         mRandom = new Random();
         mSteps = new ArrayList<Step>();
         mStars = new ArrayList<Star>();
+        mEnemys = new ArrayList<Enemy>();
+
         mGameState = GAME_STATE_READY;
         mTouchPoint = new Vector3();
 
@@ -96,6 +107,13 @@ public class GameScreen extends ScreenAdapter {
         mFont.getData().setScale(0.8f);
         mScore = 0;
         mHighScore = 0;
+
+        // Sound関係
+        mJumpSound = Gdx.audio.newSound(Gdx.files.internal("Jump.mp3"));
+        mEnemySound = Gdx.audio.newSound(Gdx.files.internal("enemy.mp3"));
+        mStarSound = Gdx.audio.newSound(Gdx.files.internal("star.mp3"));
+        mGoalSound = Gdx.audio.newSound(Gdx.files.internal("goal.mp3"));
+        mFallSound = Gdx.audio.newSound(Gdx.files.internal("fall.mp3"));
 
         // ハイスコアをPreferencesから取得する
         mPrefs = Gdx.app.getPreferences("jp.techacademy.yasuhiko.tokushima.jumpactiongame");
@@ -139,6 +157,11 @@ public class GameScreen extends ScreenAdapter {
             mStars.get(i).draw(mGame.batch);
         }
 
+        // Enemy
+        for (int i = 0; i < mEnemys.size(); i++) {
+            mEnemys.get(i).draw(mGame.batch);
+        }
+
         // Ufo
         mUfo.draw(mGame.batch);
 
@@ -169,28 +192,78 @@ public class GameScreen extends ScreenAdapter {
         Texture starTexture = new Texture("star.png");
         Texture playerTexture = new Texture("uma.png");
         Texture ufoTexture = new Texture("ufo.png");
+        Texture enemyTexture = new Texture("majo.png");
 
-        // stepとstarをゴールの高さまで配置していく
+        // stepとstarとEnemyをゴールの高さまで配置していく
         float y = 0.0f;
 
         float maxJumpHeight =
                 Player.PLAYER_JUMP_VELOCITY * Player.PLAYER_JUMP_VELOCITY / (2 * -GRAVITY);
 
         while (y < WORLD_HEIGHT - 5) {
-            int type = mRandom.nextFloat() > 0.8f ? Step.STEP_TYPE_MOVING : Step.STEP_TYPE_STATIC;
-            float x = mRandom.nextFloat() * (WORLD_WIDTH - Step.STEP_WIDTH);
+            float lvl_c = 0.0f;
 
-            Step step = new Step(type, stepTexture, 0, 0, 144, 36);
+            // 難易度調整用（Moving Stepなどの発生率をコントロール）
+            if (y >= 200) {
+                lvl_c = 0.3f;
+            } else if (y >= 100) {
+                lvl_c = 0.1f;
+            }
+
+            int step_type = mRandom.nextFloat() > 0.8f - lvl_c ? Step.STEP_TYPE_MOVING : Step.STEP_TYPE_STATIC;
+            float x = mRandom.nextFloat() * (WORLD_WIDTH - Step.STEP_WIDTH);
+            float star_x = 0.0f;   // starの横位置を記憶する
+            float enemy_x = 0.0f;  // enemyの横位置を記憶する
+
+            // step
+            Step step = new Step(step_type, stepTexture, 0, 0, 144, 36);
             step.setPosition(x, y);
             mSteps.add(step);
 
-            if (mRandom.nextFloat() > 0.6f) {
+            // star
+            if (mRandom.nextFloat() > 0.6f - lvl_c) {
                 Star star = new Star(starTexture, 0, 0, 72, 72);
+                star_x = step.getX() + mRandom.nextFloat(); // starの横位置をランダムで求める
                 star.setPosition(
-                        step.getX() + mRandom.nextFloat(),
+                        star_x,
                         step.getY() + Star.STAR_HEIGHT + mRandom.nextFloat() * 3
                 );
                 mStars.add(star);
+            }
+
+            // Enemy
+            if (y > 0.1f && mRandom.nextFloat() > 0.6f - lvl_c) {
+                enemy_x = step.getX() + mRandom.nextFloat();
+                // starと近すぎたら、ちょっと離す
+                Gdx.app.log("JampActionGame",
+                        "star_x = " + String.valueOf(star_x).toString() +
+                        ", enemy_x = " + String.valueOf(enemy_x).toString() +
+                        ", sa = " + Math.abs(enemy_x - star_x)
+                );
+                if (star_x != 0.0f && Math.abs(enemy_x - star_x) < 1.0f) {
+                    if (mRandom.nextFloat() > 0.5f) {
+                        enemy_x += 1.3f;
+                    } else {
+                        enemy_x -= 1.3f;
+                    }
+                }
+                Gdx.app.log("JampActionGame",
+                        "star_x = " + String.valueOf(star_x).toString() +
+                                ", enemy_x = " + String.valueOf(enemy_x).toString() +
+                                ", sa = " + Math.abs(enemy_x - star_x)
+                );
+                int enemy_type =
+                        mRandom.nextFloat() > 0.8f - lvl_c ?
+                                Enemy.ENEMY_TYPE_MOVING : Enemy.ENEMY_TYPE_STATIC;
+                int enemy_direction =
+                        mRandom.nextFloat() >= 0.5f ?
+                                Enemy.ENEMY_DIRECTION_RIGHT : Enemy.ENEMY_DIRECTION_LEFT;
+                Enemy enemy = new Enemy(enemy_type, enemy_direction, enemyTexture, 0, 0, 120, 98);
+                enemy.setPosition(
+                        enemy_x,
+                        step.getY() + Enemy.ENEMY_HEIGHT + mRandom.nextFloat() * 5
+                );
+                mEnemys.add(enemy);
             }
 
             y += (maxJumpHeight - 0.5f);
@@ -246,8 +319,14 @@ public class GameScreen extends ScreenAdapter {
             mSteps.get(i).update(delta);
         }
 
+        // Enemy
+        for (int i = 0; i < mEnemys.size(); i++) {
+            mEnemys.get(i).update(delta);
+        }
+
         // Player
         if (mPlayer.getY() <= 0.5f) {
+            mJumpSound.play();
             mPlayer.hitstep();
         }
         mPlayer.update(delta, accel);
@@ -269,8 +348,19 @@ public class GameScreen extends ScreenAdapter {
     private void checkCollision() {
         // UFO（ゴールとの当たり判定）
         if (mPlayer.getBoundingRectangle().overlaps(mUfo.getBoundingRectangle())) {
+            mGoalSound.play();
             mGameState = GAME_STATE_GAMEOVER;
             return;
+        }
+
+        // Enemyとの当たり判定
+        for (int i = 0; i < mEnemys.size(); i++) {
+            Enemy enemy = mEnemys.get(i);
+
+            if (mPlayer.getBoundingRectangle().overlaps(enemy.getBoundingRectangle())) {
+                mEnemySound.play();
+                mGameState = GAME_STATE_GAMEOVER;
+            }
         }
 
         // Starとの当たり判定
@@ -283,6 +373,7 @@ public class GameScreen extends ScreenAdapter {
 
             if (mPlayer.getBoundingRectangle().overlaps(star.getBoundingRectangle())) {
                 star.get();
+                mStarSound.play();
                 mScore++;
                 if (mScore > mHighScore) {
                     mHighScore = mScore;
@@ -309,6 +400,7 @@ public class GameScreen extends ScreenAdapter {
 
             if (mPlayer.getY() > step.getY()) {
                 if (mPlayer.getBoundingRectangle().overlaps(step.getBoundingRectangle())) {
+                    mJumpSound.play();
                     mPlayer.hitstep();
                     if (mRandom.nextFloat() > 0.5f) {
                         step.vanish();
@@ -321,7 +413,8 @@ public class GameScreen extends ScreenAdapter {
 
     private void checkGameOver() {
         if (mHeightSoFar - CAMERA_HEIGHT / 2 > mPlayer.getY()) {
-            Gdx.app.log("JampActionGame", "GAMEOVER");
+            //Gdx.app.log("JampActionGame", "GAMEOVER");
+            mFallSound.play();
             mGameState = GAME_STATE_GAMEOVER;
         }
     }
