@@ -235,11 +235,11 @@ public class GameScreen extends ScreenAdapter {
             if (y > 0.1f && mRandom.nextFloat() > 0.6f - lvl_c) {
                 enemy_x = step.getX() + mRandom.nextFloat();
                 // starと近すぎたら、ちょっと離す
-                Gdx.app.log("JampActionGame",
-                        "star_x = " + String.valueOf(star_x).toString() +
-                        ", enemy_x = " + String.valueOf(enemy_x).toString() +
-                        ", sa = " + Math.abs(enemy_x - star_x)
-                );
+//                Gdx.app.log("JampActionGame",
+//                        "star_x = " + String.valueOf(star_x).toString() +
+//                        ", enemy_x = " + String.valueOf(enemy_x).toString() +
+//                        ", sa = " + Math.abs(enemy_x - star_x)
+//                );
                 if (star_x != 0.0f && Math.abs(enemy_x - star_x) < 1.0f) {
                     if (mRandom.nextFloat() > 0.5f) {
                         enemy_x += 1.3f;
@@ -247,11 +247,11 @@ public class GameScreen extends ScreenAdapter {
                         enemy_x -= 1.3f;
                     }
                 }
-                Gdx.app.log("JampActionGame",
-                        "star_x = " + String.valueOf(star_x).toString() +
-                                ", enemy_x = " + String.valueOf(enemy_x).toString() +
-                                ", sa = " + Math.abs(enemy_x - star_x)
-                );
+//                Gdx.app.log("JampActionGame",
+//                        "star_x = " + String.valueOf(star_x).toString() +
+//                                ", enemy_x = " + String.valueOf(enemy_x).toString() +
+//                                ", sa = " + Math.abs(enemy_x - star_x)
+//                );
                 int enemy_type =
                         mRandom.nextFloat() > 0.8f - lvl_c ?
                                 Enemy.ENEMY_TYPE_MOVING : Enemy.ENEMY_TYPE_STATIC;
